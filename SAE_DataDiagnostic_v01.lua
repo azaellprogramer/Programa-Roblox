@@ -1,12 +1,12 @@
 --!nonstrict
--- SAE DIAGNOSTICO v0.3 | BUILD 2026-10-25-A
+-- SAE DIAGNOSTICO v0.4 | BUILD 2026-10-25-B
 -- Sustituye el contenido de SAE_DataDiagnostic_v01.lua en GitHub con este archivo.
--- Ventana naranja, paginacion, errores visibles y lectura por entrada.
+-- v0.4: otras carpetas, BillboardGui/SurfaceGui y estructura real de modulos.
 -- Solo lectura local: sin remotos, require, red ni envio de datos.
 
 local visibleOutput, visibleStatus
 local function reportFailure(reason)
-    local message = "SAE v0.3: " .. tostring(reason)
+    local message = "SAE v0.4: " .. tostring(reason)
     warn(message)
     local shown = pcall(function()
         if not visibleOutput or not visibleOutput.Parent then error("Sin ventana") end
@@ -16,7 +16,7 @@ local function reportFailure(reason)
     if not shown then
         pcall(function()
             game:GetService("StarterGui"):SetCore("SendNotification", {
-                Title = "SAE v0.3: error al iniciar",
+                Title = "SAE v0.4: error al iniciar",
                 Text = message:sub(1, 240), Duration = 30
             })
         end)
@@ -24,7 +24,7 @@ local function reportFailure(reason)
 end
 
 local function start()
-    print("[SAE v0.3 BUILD 2026-10-25-A] Iniciando...")
+    print("[SAE v0.4 BUILD 2026-10-25-B] Iniciando...")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -39,7 +39,7 @@ if not playerGui then
     error("No se encontro PlayerGui tras esperar 10 segundos.")
 end
 
-local ROOT_NAMES = { "AreaEggSlotsClient", "AreaEggSlots" }
+local ROOT_NAMES = { "Eggs", "PlacedEggRenders", "HalloweenEggHolders" }
 local MAX_ENTRIES = 80
 local MAX_PER_ENTRY = 320
 local MAX_QUEUE_PER_ENTRY = 640
@@ -121,13 +121,13 @@ local function readGameProperty(name)
     return clean(result, 100)
 end
 
-for _, oldName in ipairs({"SAE_DataDiagnostic_v01", "SAE_DataDiagnostic_v02", "SAE_DataDiagnostic_v03"}) do
+for _, oldName in ipairs({"SAE_DataDiagnostic_v01", "SAE_DataDiagnostic_v02", "SAE_DataDiagnostic_v03", "SAE_DataDiagnostic_v04"}) do
     local old = playerGui:FindFirstChild(oldName)
     if old then old:Destroy() end
 end
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "SAE_DataDiagnostic_v03"
+gui.Name = "SAE_DataDiagnostic_v04"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 1000
 gui.Enabled = true
@@ -154,7 +154,7 @@ local title = Instance.new("TextLabel")
 title.Position = UDim2.fromOffset(16, 8)
 title.Size = UDim2.new(1, -72, 0, 32)
 title.BackgroundTransparency = 1
-title.Text = "SAE v0.3 | NUEVA VERSION"
+title.Text = "SAE v0.4 | CARTELES Y DATOS"
 title.TextColor3 = Color3.fromRGB(241, 242, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
@@ -178,7 +178,7 @@ end)
 local scanButton = Instance.new("TextButton")
 scanButton.Position = UDim2.fromOffset(16, 49)
 scanButton.Size = UDim2.fromOffset(110, 34)
-scanButton.BackgroundColor3 = Color3.fromRGB(222, 119, 28)
+scanButton.BackgroundColor3 = Color3.fromRGB(20, 150, 175)
 scanButton.BorderSizePixel = 0
 scanButton.Text = "Escanear"
 scanButton.TextColor3 = Color3.new(1, 1, 1)
@@ -190,7 +190,7 @@ local status = Instance.new("TextLabel")
 status.Position = UDim2.fromOffset(136, 49)
 status.Size = UDim2.new(1, -152, 0, 34)
 status.BackgroundTransparency = 1
-status.Text = "v0.3 iniciada. Preparando lectura..."
+status.Text = "v0.4 iniciada. Preparando lectura..."
 visibleStatus = status
 status.TextWrapped = true
 status.TextColor3 = Color3.fromRGB(186, 192, 208)
@@ -224,7 +224,7 @@ output.TextYAlignment = Enum.TextYAlignment.Top
 output.Font = Enum.Font.Code
 output.TextSize = 13
 output.TextColor3 = Color3.fromRGB(213, 225, 231)
-output.Text = "SAE v0.3 se inicio correctamente. Esperando escaneo..."
+output.Text = "SAE v0.4 se inicio correctamente. Esperando escaneo..."
 visibleOutput = output
 output.Parent = scroll
 
@@ -234,7 +234,7 @@ previous.Position = UDim2.new(0, 16, 1, -44)
 previous.Size = UDim2.fromOffset(110, 30)
 previous.Text = "< Anterior"
 previous.TextSize = 14
-previous.BackgroundColor3 = Color3.fromRGB(222, 119, 28)
+previous.BackgroundColor3 = Color3.fromRGB(20, 150, 175)
 previous.TextColor3 = Color3.new(1, 1, 1)
 previous.Parent = frame
 local nextPage = Instance.new("TextButton")
@@ -422,66 +422,153 @@ local function listChildren(label, parent, lines)
     if #children > 60 then table.insert(lines, "  [lista parcial]") end
 end
 
+local function listTree(label, root, lines)
+    table.insert(lines, "")
+    table.insert(lines, label .. " (nombres y clases; sin ejecutar modulos):")
+    if not root then table.insert(lines, "  NO ENCONTRADO") return end
+    local queue, head, seen = {{object=root, depth=0}}, 1, 0
+    while head <= #queue and seen < 220 do
+        local entry = queue[head]
+        head, seen = head + 1, seen + 1
+        if entry.depth > 0 then
+            table.insert(lines, "  " .. fullName(entry.object)
+                .. " [" .. entry.object.ClassName .. "]")
+        end
+        if entry.depth < 2 then
+            local children = childrenOf(entry.object)
+            for i = 1, math.min(#children, 160) do
+                if #queue < 440 then
+                    table.insert(queue, {object=children[i], depth=entry.depth+1})
+                end
+            end
+            if #children > 160 then
+                table.insert(lines, "  [hijos omitidos en " .. fullName(entry.object) .. "]")
+            end
+        end
+        if seen % 80 == 0 then task.wait() end
+    end
+    if head <= #queue then table.insert(lines, "  [estructura parcial]") end
+end
+
+local function scanWorldLabels(lines)
+    table.insert(lines, "")
+    table.insert(lines, "CARTELES CANDIDATOS (el texto aun no confirma produccion)")
+    local associations = {}
+    for _, name in ipairs({"AreaEggSlotsClient", "Eggs", "PlacedEggRenders", "HalloweenEggHolders"}) do
+        local root = Workspace:FindFirstChild(name)
+        if root then associations[root] = true end
+    end
+    local function associated(object)
+        local current, steps = object, 0
+        while current and steps < 40 do
+            if associations[current] then return true end
+            current, steps = current.Parent, steps + 1
+        end
+        return false
+    end
+    local known = {"egg", "/s", "per second", "income", "production", "produccion", "jackalope", "prismgecko", "petalbeetle", "bluejay"}
+    local visited, seen, matched, displayed, partial = 0, 0, 0, 0, false
+    local function inspectGui(object)
+        seen = seen + 1
+        local ok, adornee = pcall(function() return object.Adornee end)
+        local anchor = ok and adornee or object.Parent
+        local texts, paths, queue, head = {}, {}, {object}, 1
+        while head <= #queue and head <= 220 do
+            local item = queue[head]
+            head = head + 1
+            if item:IsA("TextLabel") or item:IsA("TextButton") then
+                local readOk, value = pcall(function() return item.Text end)
+                if readOk and type(value)=="string" and value~="" then
+                    if #texts < 20 then
+                        table.insert(texts, clean(value, 240))
+                        table.insert(paths, fullName(item))
+                    else partial = true end
+                end
+            end
+            for _, child in ipairs(childrenOf(item)) do
+                if #queue < 440 then table.insert(queue, child) else partial = true end
+            end
+        end
+        if head <= #queue then partial = true end
+        local combined = table.concat(texts, " | "):lower()
+        local relevant = associated(anchor) or associated(object)
+        for _, word in ipairs(known) do
+            if combined:find(word, 1, true) then relevant = true break end
+        end
+        if not relevant then return end
+        matched = matched + 1
+        if displayed >= 50 then partial = true return end
+        displayed = displayed + 1
+        table.insert(lines, "")
+        table.insert(lines, "CARTEL " .. displayed .. ": " .. fullName(object))
+        table.insert(lines, "  Destino: " .. (anchor and fullName(anchor) or "[sin destino]"))
+        if #texts == 0 then table.insert(lines, "  Sin texto en esta muestra.") end
+        for i, text in ipairs(texts) do
+            table.insert(lines, "  TEXTO " .. paths[i] .. " = " .. safeValue(text))
+        end
+    end
+    local function branch(root)
+        if root == gui or root.Name:find("SAE_", 1, true) == 1 then return end
+        local queue, head, count = {root}, 1, 0
+        while head <= #queue and count < 900 do
+            if not gui.Parent then return end
+            local object = queue[head]
+            head, count, visited = head + 1, count + 1, visited + 1
+            if object:IsA("BillboardGui") or object:IsA("SurfaceGui") then inspectGui(object) end
+            local children = childrenOf(object)
+            for i = 1, math.min(#children, 240) do
+                if #queue < 1800 then table.insert(queue, children[i]) else partial = true end
+            end
+            if #children > 240 then partial = true end
+            if count % 100 == 0 then task.wait() end
+        end
+        if head <= #queue then partial = true end
+    end
+    for _, container in ipairs({Workspace, playerGui}) do
+        local branches = childrenOf(container)
+        for i=1,math.min(#branches, 120) do
+            status.Text = "Buscando carteles: " .. clean(branches[i].Name, 55)
+            branch(branches[i])
+            task.wait()
+        end
+        if #branches > 120 then partial = true end
+    end
+    table.insert(lines, "")
+    table.insert(lines, "Resumen carteles: objetos " .. visited .. ", carteles examinados " .. seen
+        .. ", candidatos " .. matched .. ", mostrados " .. displayed)
+    if partial then table.insert(lines, "COBERTURA PARCIAL: se aplicaron limites de lectura o salida.") end
+end
+
 local function collectReport()
     local lines = {
-        "SAE v0.3 | NUEVA VERSION",
+        "SAE v0.4 | CARTELES Y DATOS",
         "PlaceId: " .. readGameProperty("PlaceId"),
         "Instancia: " .. readGameProperty("JobId"),
         "Fecha UTC: " .. os.date("!%Y-%m-%dT%H:%M:%SZ"),
-        "",
-        "Producción: NO VERIFICADA.",
-        "Este informe muestra nombres, atributos y textos.",
-        "La cobertura del cliente puede ser parcial por streaming.",
-        "",
-        "CARPETAS CANDIDATAS",
+        "Produccion: NO VERIFICADA; no se calcula a partir del aspecto del huevo.",
+        "Solo lectura. Los modulos se listan, no se ejecutan.",
+        "Acercate a un huevo con su cartel visible y pulsa Escanear.",
     }
-
-    local found = 0
-
+    scanWorldLabels(lines)
+    table.insert(lines, "")
+    table.insert(lines, "OTRAS CARPETAS DE HUEVOS")
     for _, name in ipairs(ROOT_NAMES) do
         local root = Workspace:FindFirstChild(name)
-
         if root then
-            found = found + 1
+            local attrs = readAttributes(root)
+            for key,value in pairs(attrs) do
+                if not ignoredAttribute(key) then
+                    table.insert(lines, "ATRIBUTO " .. fullName(root) .. " | " .. clean(key,70) .. " = " .. safeValue(value))
+                end
+            end
             inspectRoot(root, lines)
-        else
-            table.insert(lines, "- Workspace." .. name .. ": NO ENCONTRADA")
-        end
+        else table.insert(lines, "Workspace." .. name .. ": NO ENCONTRADA") end
     end
-
-    table.insert(lines, "")
-    table.insert(lines, "MÓDULOS CANDIDATOS (solo existencia; no se ejecutan)")
-
-    local library = ReplicatedStorage:FindFirstChild("Library")
-    local client = library and library:FindFirstChild("Client")
-
-    for _, name in ipairs({ "EggCmds", "Network" }) do
-        local object = client and client:FindFirstChild(name)
-
-        table.insert(
-            lines,
-            "- Library.Client." .. name .. ": "
-                .. (object and (object.ClassName .. " presente")
-                    or "NO ENCONTRADO")
-        )
+    for _, name in ipairs({"Client", "Controllers", "Shared", "Data"}) do
+        listTree("ReplicatedStorage." .. name, ReplicatedStorage:FindFirstChild(name), lines)
     end
-
-    table.insert(lines, "")
-
-    if found == 0 then
-        table.insert(lines, "No se localizaron las rutas candidatas.")
-        table.insert(lines, "Las rutas pueden haber cambiado.")
-    else
-        table.insert(lines, "Comparte los nombres y valores observados.")
-        table.insert(lines, "Price no equivale necesariamente a producción/s.")
-    end
-
-    listChildren("Workspace", Workspace, lines)
-    listChildren("ReplicatedStorage", ReplicatedStorage, lines)
-    listChildren("ReplicatedStorage.Library", library, lines)
-    listChildren("ReplicatedStorage.Library.Client", client, lines)
-    table.insert(lines, "Todavía no hay filtro 1 B/s ni envío al panel.")
-
+    listChildren("PlayerGui", playerGui, lines)
+    table.insert(lines, "No hay aun filtro 1 B/s ni envio al panel.")
     return table.concat(lines, "\n")
 end
 
@@ -503,10 +590,10 @@ local function runScan()
     if gui.Parent then
         if ok then
             setReport(report)
-            status.Text = "Listo. Usa Anterior / Siguiente y comparte el informe."
+            status.Text = "Listo. Comparte CARTELES y las carpetas Client / Controllers / Shared / Data."
         else
-            setReport("[SAE v0.3] Fallo de lectura: " .. clean(report, 1500))
-            warn("[SAE v0.3] " .. tostring(report))
+            setReport("[SAE v0.4] Fallo de lectura: " .. clean(report, 1500))
+            warn("[SAE v0.4] " .. tostring(report))
             status.Text = "Conserva el mensaje mostrado."
         end
 
