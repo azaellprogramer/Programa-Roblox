@@ -1,31 +1,52 @@
 --!nonstrict
--- SAE: diagnóstico de datos del cliente.
--- Todavía no es el radar ni el panel multicuenta.
+-- SAE DIAGNOSTICO v0.3 | BUILD 2026-10-25-A
+-- Sustituye el contenido de SAE_DataDiagnostic_v01.lua en GitHub con este archivo.
+-- Ventana naranja, paginacion, errores visibles y lectura por entrada.
+-- Solo lectura local: sin remotos, require, red ni envio de datos.
 
+local visibleOutput, visibleStatus
+local function reportFailure(reason)
+    local message = "SAE v0.3: " .. tostring(reason)
+    warn(message)
+    local shown = pcall(function()
+        if not visibleOutput or not visibleOutput.Parent then error("Sin ventana") end
+        visibleOutput.Text = message
+        if visibleStatus then visibleStatus.Text = "ERROR: comparte el mensaje de abajo." end
+    end)
+    if not shown then
+        pcall(function()
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "SAE v0.3: error al iniciar",
+                Text = message:sub(1, 240), Duration = 30
+            })
+        end)
+    end
+end
+
+local function start()
+    print("[SAE v0.3 BUILD 2026-10-25-A] Iniciando...")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 if not player then
-    warn("[SAE] Se necesita un contexto cliente con LocalPlayer.")
-    return
+    error("No hay LocalPlayer. Ejecuta el archivo con el juego abierto.")
 end
 
 local playerGui = player:WaitForChild("PlayerGui", 10)
 if not playerGui then
-    warn("[SAE] No se encontró PlayerGui.")
-    return
+    error("No se encontro PlayerGui tras esperar 10 segundos.")
 end
 
 local ROOT_NAMES = { "AreaEggSlotsClient", "AreaEggSlots" }
-local MAX_VISITED = 450
-local MAX_QUEUED = 800
-local MAX_ATTRIBUTES = 12
-local MAX_ATTRIBUTE_OBJECTS = 12
-local MAX_TEXT_OBJECTS = 12
-local MAX_STRUCTURE_OBJECTS = 12
-local MAX_CHILDREN_PER_NODE = 100
+local MAX_ENTRIES = 80
+local MAX_PER_ENTRY = 320
+local MAX_QUEUE_PER_ENTRY = 640
+local MAX_ATTRIBUTE_LINES = 16
+local MAX_TEXT_LINES = 8
+local MAX_VALUE_LINES = 8
+local MAX_CHILDREN_PER_NODE = 160
 
 local function clean(value, limit)
     local ok, result = pcall(tostring, value)
@@ -100,15 +121,16 @@ local function readGameProperty(name)
     return clean(result, 100)
 end
 
-local oldGui = playerGui:FindFirstChild("SAE_DataDiagnostic_v01")
-if oldGui then
-    oldGui:Destroy()
+for _, oldName in ipairs({"SAE_DataDiagnostic_v01", "SAE_DataDiagnostic_v02", "SAE_DataDiagnostic_v03"}) do
+    local old = playerGui:FindFirstChild(oldName)
+    if old then old:Destroy() end
 end
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "SAE_DataDiagnostic_v01"
+gui.Name = "SAE_DataDiagnostic_v03"
 gui.ResetOnSpawn = false
-gui.DisplayOrder = 50
+gui.DisplayOrder = 1000
+gui.Enabled = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
@@ -116,7 +138,7 @@ local frame = Instance.new("Frame")
 frame.AnchorPoint = Vector2.new(0.5, 0.5)
 frame.Position = UDim2.fromScale(0.5, 0.5)
 frame.Size = UDim2.fromScale(0.92, 0.78)
-frame.BackgroundColor3 = Color3.fromRGB(22, 23, 33)
+frame.BackgroundColor3 = Color3.fromRGB(32, 26, 21)
 frame.BorderSizePixel = 0
 frame.Parent = gui
 
@@ -132,7 +154,7 @@ local title = Instance.new("TextLabel")
 title.Position = UDim2.fromOffset(16, 8)
 title.Size = UDim2.new(1, -72, 0, 32)
 title.BackgroundTransparency = 1
-title.Text = "SAE | Diagnóstico de datos"
+title.Text = "SAE v0.3 | NUEVA VERSION"
 title.TextColor3 = Color3.fromRGB(241, 242, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
@@ -156,7 +178,7 @@ end)
 local scanButton = Instance.new("TextButton")
 scanButton.Position = UDim2.fromOffset(16, 49)
 scanButton.Size = UDim2.fromOffset(110, 34)
-scanButton.BackgroundColor3 = Color3.fromRGB(121, 91, 220)
+scanButton.BackgroundColor3 = Color3.fromRGB(222, 119, 28)
 scanButton.BorderSizePixel = 0
 scanButton.Text = "Escanear"
 scanButton.TextColor3 = Color3.new(1, 1, 1)
@@ -168,7 +190,8 @@ local status = Instance.new("TextLabel")
 status.Position = UDim2.fromOffset(136, 49)
 status.Size = UDim2.new(1, -152, 0, 34)
 status.BackgroundTransparency = 1
-status.Text = "Preparando..."
+status.Text = "v0.3 iniciada. Preparando lectura..."
+visibleStatus = status
 status.TextWrapped = true
 status.TextColor3 = Color3.fromRGB(186, 192, 208)
 status.TextSize = 12
@@ -177,7 +200,7 @@ status.Parent = frame
 
 local scroll = Instance.new("ScrollingFrame")
 scroll.Position = UDim2.fromOffset(16, 96)
-scroll.Size = UDim2.new(1, -32, 1, -112)
+scroll.Size = UDim2.new(1, -32, 1, -152)
 scroll.BackgroundColor3 = Color3.fromRGB(15, 17, 25)
 scroll.BorderSizePixel = 0
 scroll.ScrollBarThickness = 6
@@ -201,122 +224,207 @@ output.TextYAlignment = Enum.TextYAlignment.Top
 output.Font = Enum.Font.Code
 output.TextSize = 13
 output.TextColor3 = Color3.fromRGB(213, 225, 231)
-output.Text = "El informe aparecerá aquí."
+output.Text = "SAE v0.3 se inicio correctamente. Esperando escaneo..."
+visibleOutput = output
 output.Parent = scroll
 
-local function inspectRoot(root, lines)
-    local queue = { root }
-    local head = 1
-    local visited = 0
-    local attributeObjects = 0
-    local textObjects = 0
-    local structureObjects = 0
-    local omittedChildren = false
+local pages, pageIndex = { "Esperando informe..." }, 1
+local previous = Instance.new("TextButton")
+previous.Position = UDim2.new(0, 16, 1, -44)
+previous.Size = UDim2.fromOffset(110, 30)
+previous.Text = "< Anterior"
+previous.TextSize = 14
+previous.BackgroundColor3 = Color3.fromRGB(222, 119, 28)
+previous.TextColor3 = Color3.new(1, 1, 1)
+previous.Parent = frame
+local nextPage = Instance.new("TextButton")
+nextPage.Position = UDim2.new(1, -126, 1, -44)
+nextPage.Size = UDim2.fromOffset(110, 30)
+nextPage.Text = "Siguiente >"
+nextPage.TextSize = 14
+nextPage.BackgroundColor3 = previous.BackgroundColor3
+nextPage.TextColor3 = Color3.new(1, 1, 1)
+nextPage.Parent = frame
+local pageLabel = Instance.new("TextLabel")
+pageLabel.Position = UDim2.new(0, 136, 1, -44)
+pageLabel.Size = UDim2.new(1, -272, 0, 30)
+pageLabel.BackgroundTransparency = 1
+pageLabel.TextColor3 = Color3.new(1, 1, 1)
+pageLabel.TextSize = 14
+pageLabel.Text = "Pagina 1/1"
+pageLabel.Parent = frame
 
+local function renderPage()
+    if not gui.Parent then return end
+    output.Text = pages[pageIndex] or "Sin datos."
+    pageLabel.Text = "Pagina " .. pageIndex .. "/" .. #pages
+    scroll.CanvasPosition = Vector2.new(0, 0)
+end
+local function setReport(report)
+    pages, pageIndex = {}, 1
+    local buffer, size = {}, 0
+    for line in (report .. "\n"):gmatch("(.-)\n") do
+        if size + #line + 1 > 5500 and #buffer > 0 then
+            table.insert(pages, table.concat(buffer, "\n"))
+            buffer, size = {}, 0
+        end
+        table.insert(buffer, line)
+        size = size + #line + 1
+    end
+    if #buffer > 0 then table.insert(pages, table.concat(buffer, "\n")) end
+    if #pages == 0 then pages = { "Sin datos." } end
+    renderPage()
+end
+previous.Activated:Connect(function()
+    pageIndex = math.max(1, pageIndex - 1)
+    renderPage()
+end)
+nextPage.Activated:Connect(function()
+    pageIndex = math.min(#pages, pageIndex + 1)
+    renderPage()
+end)
+
+local function ignoredAttribute(key)
+    return protectedKey(key)
+        or key == "RBX_ReimportId"
+        or key == "OldId"
+        or key == "DontModify"
+end
+
+local function inspectRoot(root, lines)
+    local entries = childrenOf(root)
+    local count = math.min(#entries, MAX_ENTRIES)
     table.insert(lines, "")
     table.insert(lines, "RUTA: " .. fullName(root))
-    table.insert(lines, "Hijos directos: " .. #childrenOf(root))
-    table.insert(lines, "Muestras de estructura y valores:")
+    table.insert(lines, "Hijos directos: " .. #entries)
+    table.insert(lines, "Cada entrada tiene su propio limite de lectura.")
+    local totalVisited, totalTexts, totalValues = 0, 0, 0
 
-    while head <= #queue and visited < MAX_VISITED do
-        if not gui.Parent then
-            return
+    for index = 1, count do
+        if not gui.Parent then return end
+        local egg = entries[index]
+        status.Text = "Revisando entrada " .. index .. "/" .. count
+        local queue, head, visited = { egg }, 1, 0
+        local shownAttrs, shownTexts, shownValues = 0, 0, 0
+        local details, summary = {}, {}
+        local limited, outputLimited = false, false
+        local textSeen = {}
+        local firstChildren = childrenOf(egg)
+        for i = 1, math.min(#firstChildren, 10) do
+            table.insert(summary, clean(firstChildren[i].Name, 55)
+                .. " [" .. firstChildren[i].ClassName .. "]")
         end
+        table.insert(lines, "")
+        table.insert(lines, "ENTRADA " .. index .. ": " .. clean(egg.Name, 100)
+            .. " [" .. egg.ClassName .. "]")
+        table.insert(lines, "  Hijos: " .. (#summary > 0
+            and table.concat(summary, ", ") or "(ninguno)"))
 
-        local object = queue[head]
-        head = head + 1
-        visited = visited + 1
-
-        local attributes = readAttributes(object)
-        local keys = {}
-
-        for key in pairs(attributes) do
-            if not protectedKey(key) then
-                table.insert(keys, key)
+        while head <= #queue and visited < MAX_PER_ENTRY do
+            if not gui.Parent then return end
+            local object = queue[head]
+            head, visited = head + 1, visited + 1
+            local attributes = readAttributes(object)
+            local keys = {}
+            for key in pairs(attributes) do
+                if not ignoredAttribute(key) then table.insert(keys, key) end
             end
-        end
-        table.sort(keys)
-
-        local showStructure = structureObjects < MAX_STRUCTURE_OBJECTS
-        local showAttributes = #keys > 0
-            and attributeObjects < MAX_ATTRIBUTE_OBJECTS
-
-        if showStructure or showAttributes then
-            table.insert(
-                lines,
-                "- " .. fullName(object) .. " [" .. object.ClassName .. "]"
-            )
-
-            if showStructure then
-                structureObjects = structureObjects + 1
-            end
-
-            if showAttributes then
-                attributeObjects = attributeObjects + 1
-
-                for i = 1, math.min(#keys, MAX_ATTRIBUTES) do
-                    local key = keys[i]
-                    table.insert(
-                        lines,
-                        "    " .. clean(key, 80)
-                            .. " = " .. safeValue(attributes[key])
-                    )
-                end
-
-                if #keys > MAX_ATTRIBUTES then
-                    table.insert(lines, "    [más atributos omitidos]")
+            table.sort(keys)
+            for _, key in ipairs(keys) do
+                if shownAttrs < MAX_ATTRIBUTE_LINES then
+                    shownAttrs = shownAttrs + 1
+                    table.insert(details, "  ATRIBUTO " .. fullName(object)
+                        .. " | " .. clean(key, 70) .. " = " .. safeValue(attributes[key]))
+                else
+                    outputLimited = true
                 end
             end
-        end
 
-        if textObjects < MAX_TEXT_OBJECTS
-            and (object:IsA("TextLabel")
-                or object:IsA("TextButton")
-                or object:IsA("TextBox")) then
-            local text = object.Text
-
-            if text and text ~= "" then
-                textObjects = textObjects + 1
-                table.insert(
-                    lines,
-                    "  TEXTO " .. fullName(object) .. " = " .. safeValue(text)
-                )
+            if object:IsA("TextLabel") or object:IsA("TextButton")
+                or object:IsA("TextBox") then
+                local ok, value = pcall(function() return object.Text end)
+                if ok and value ~= "" then
+                    local text = safeValue(value)
+                    if not textSeen[text] then
+                        textSeen[text] = true
+                        totalTexts = totalTexts + 1
+                        if shownTexts < MAX_TEXT_LINES then
+                            shownTexts = shownTexts + 1
+                            table.insert(details, "  TEXTO " .. fullName(object)
+                                .. " = " .. text)
+                        else
+                            outputLimited = true
+                        end
+                    end
+                end
             end
-        end
 
-        local children = childrenOf(object)
-        local availableSlots = math.max(0, MAX_QUEUED - #queue)
-        local take = math.min(
-            #children,
-            MAX_CHILDREN_PER_NODE,
-            availableSlots
-        )
+            if object:IsA("NumberValue") or object:IsA("IntValue")
+                or object:IsA("StringValue") or object:IsA("BoolValue") then
+                if not protectedKey(object.Name) then
+                    local ok, value = pcall(function() return object.Value end)
+                    if ok then
+                        totalValues = totalValues + 1
+                        if shownValues < MAX_VALUE_LINES then
+                            shownValues = shownValues + 1
+                            table.insert(details, "  VALOR " .. fullName(object)
+                                .. " [" .. object.ClassName .. "] = " .. safeValue(value))
+                        else
+                            outputLimited = true
+                        end
+                    end
+                end
+            end
 
-        if take < #children then
-            omittedChildren = true
+            local children = childrenOf(object)
+            local take = math.min(#children, MAX_CHILDREN_PER_NODE,
+                math.max(0, MAX_QUEUE_PER_ENTRY - #queue))
+            if take < #children then limited = true end
+            for i = 1, take do table.insert(queue, children[i]) end
+            if visited % 80 == 0 then task.wait() end
         end
-
-        for i = 1, take do
-            table.insert(queue, children[i])
+        totalVisited = totalVisited + visited
+        for _, line in ipairs(details) do table.insert(lines, line) end
+        if #details == 0 then
+            table.insert(lines, "  Sin atributos utiles, textos ni valores en esta muestra.")
         end
-
-        if visited % 50 == 0 then
-            task.wait()
+        table.insert(lines, "  Examinados: " .. visited)
+        if head <= #queue or limited then
+            table.insert(lines, "  Lectura parcial de esta entrada.")
         end
+        if outputLimited then
+            table.insert(lines, "  Hay mas datos de esta entrada que no se muestran.")
+        end
+        task.wait()
     end
-
-    table.insert(lines, "Objetos examinados: " .. visited)
-    table.insert(lines, "Objetos mostrados con atributos: " .. attributeObjects)
-    table.insert(lines, "Textos mostrados: " .. textObjects)
-
-    if head <= #queue or omittedChildren then
-        table.insert(lines, "MUESTRA LIMITADA: hay objetos no examinados.")
+    table.insert(lines, "")
+    table.insert(lines, "RESUMEN: entradas " .. count .. "/" .. #entries
+        .. ", objetos " .. totalVisited .. ", textos " .. totalTexts
+        .. ", valores " .. totalValues)
+    if count < #entries then
+        table.insert(lines, "Hay entradas sin examinar por el limite de seguridad.")
     end
+end
+
+local function listChildren(label, parent, lines)
+    table.insert(lines, "")
+    table.insert(lines, label .. " (solo nombres y clases):")
+    if not parent then
+        table.insert(lines, "  NO ENCONTRADO")
+        return
+    end
+    local children = childrenOf(parent)
+    for i = 1, math.min(#children, 60) do
+        local child = children[i]
+        table.insert(lines, "  " .. clean(child.Name, 90)
+            .. " [" .. child.ClassName .. "]")
+    end
+    if #children > 60 then table.insert(lines, "  [lista parcial]") end
 end
 
 local function collectReport()
     local lines = {
-        "SAE | Diagnóstico v0.1",
+        "SAE v0.3 | NUEVA VERSION",
         "PlaceId: " .. readGameProperty("PlaceId"),
         "Instancia: " .. readGameProperty("JobId"),
         "Fecha UTC: " .. os.date("!%Y-%m-%dT%H:%M:%SZ"),
@@ -368,6 +476,10 @@ local function collectReport()
         table.insert(lines, "Price no equivale necesariamente a producción/s.")
     end
 
+    listChildren("Workspace", Workspace, lines)
+    listChildren("ReplicatedStorage", ReplicatedStorage, lines)
+    listChildren("ReplicatedStorage.Library", library, lines)
+    listChildren("ReplicatedStorage.Library.Client", client, lines)
     table.insert(lines, "Todavía no hay filtro 1 B/s ni envío al panel.")
 
     return table.concat(lines, "\n")
@@ -386,14 +498,15 @@ local function runScan()
     scanButton.Text = "Leyendo..."
     status.Text = "Consultando las rutas candidatas."
 
-    local ok, report = pcall(collectReport)
+    local ok, report = xpcall(collectReport, function(e) return tostring(e) end)
 
     if gui.Parent then
         if ok then
-            output.Text = report
-            status.Text = "Listo. Selecciona el texto o envía capturas."
+            setReport(report)
+            status.Text = "Listo. Usa Anterior / Siguiente y comparte el informe."
         else
-            output.Text = "[SAE] Fallo de lectura: " .. clean(report, 500)
+            setReport("[SAE v0.3] Fallo de lectura: " .. clean(report, 1500))
+            warn("[SAE v0.3] " .. tostring(report))
             status.Text = "Conserva el mensaje mostrado."
         end
 
@@ -408,4 +521,13 @@ scanButton.Activated:Connect(function()
     task.spawn(runScan)
 end)
 
-task.defer(runScan)
+task.defer(function()
+    task.wait()
+    local success, failure = pcall(runScan)
+    if not success then reportFailure(failure) end
+end)
+
+end
+
+local started, failure = xpcall(start, function(e) return tostring(e) end)
+if not started then reportFailure(failure) end
